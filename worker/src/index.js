@@ -6,7 +6,9 @@
    GET  /theme.css   compiled theme + live overrides generated from KV config
    GET  /api/config  current config (JSON)
    PUT  /api/config  update config — requires `Authorization: Bearer <MISONO_TOKEN>`
-*/
+
+ Deploys and serves the theme even before KV is bound; saving is disabled until
+ both MISONO_KV and MISONO_TOKEN exist. */
 
 import THEME from "./theme.css";
 import PANEL from "./panel.html";
@@ -26,19 +28,28 @@ export const DEFAULT_SLOTS = {
 
 export const DEFAULT_CONFIG = {
 	motd: null,          // string, "" to hide, null for theme default
-	statusbar: null,     // string, null for theme default
-	background: null,    // https URL or null
+	statusbar: null,     // string, "" to hide, null for theme default
 	branch: null,        // override --Misono-Branch label
+	background: null,    // https URL or null
+	backgroundDim: 0,    // 0..1 dark overlay over the background image
+	accent: null,        // "R, G, B" triplet or null (keep theme's cyan accent)
+	font: null,          // font-family string, e.g. 'Comic Sans MS'
 	multipliers: { animation: 1, transition: 1, blur: 1 },
 	ui: {
 		radius: 33,            // px
+		padding: 8,            // px
 		opacitySolid: 0.8,
 		opacityFloating: 0.5,
 		opacityBackground: 0.25,
 		opacityHint: 0.1,
 	},
 	slots: { ...DEFAULT_SLOTS }, // SNDL color slot -> scheme
+	toggles: {
+		hideNotification: false,
+		hideStatusbar: false,
+	},
 	customVars: {},              // extra --Var: value pairs, escape-checked
+	customCSS: null,             // raw CSS appended to /theme.css (token-gated)
 };
 
 /* ---------- helpers ---------- */
@@ -53,7 +64,27 @@ const cssString = (s) =>
 
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
-function sanitizeConfig(raw) {
+// Accept "r,g,b" or "#rrggbb"/"#rgb"; return "r, g, b" or null.
+function parseTriplet(v) {
+	if (typeof v !== "string") return null;
+	const s = v.trim();
+	let m = s.match(/^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+	if (m) return [1, 2, 3].map((i) => parseInt(m[i], 16)).join(", ");
+	m = s.match(/^#([0-9a-f])([0-9a-f])([0-9a-f])$/i);
+	if (m) return [1, 2, 3].map((i) => parseInt(m[i] + m[i], 16)).join(", ");
+	m = s.match(/^(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})$/);
+	if (m) {
+		const p = [1, 2, 3].map((i) => Math.min(255, parseInt(m[i], 10)));
+		return p.join(", ");
+	}
+	return null;
+}
+
+// CSS font-family: letters, digits, spaces, comma, quotes, hyphen only.
+const isSafeFont = (v) =>
+	typeof v === "string" && v.length <= 128 && /^[\w \-,'"]+$/.test(v);
+
+export function sanitizeConfig(raw) {
 	const d = DEFAULT_CONFIG;
 	const cfg = structuredClone(d);
 	if (typeof raw !== "object" || raw === null) return cfg;
@@ -61,8 +92,11 @@ function sanitizeConfig(raw) {
 	if (typeof raw.motd === "string") cfg.motd = raw.motd.slice(0, 2000);
 	if (typeof raw.statusbar === "string") cfg.statusbar = raw.statusbar.slice(0, 200);
 	if (typeof raw.branch === "string") cfg.branch = raw.branch.slice(0, 64);
-	if (typeof raw.background === "string" && /^https:\/\/[^"\\]+$/.test(raw.background))
+	if (typeof raw.background === "string" && /^https:\/\/[^"\\)]+$/.test(raw.background))
 		cfg.background = raw.background.slice(0, 1024);
+	cfg.backgroundDim = clamp(raw.backgroundDim, 0, 1, d.backgroundDim);
+	cfg.accent = parseTriplet(raw.accent);
+	if (isSafeFont(raw.font)) cfg.font = raw.font;
 
 	const m = raw.multipliers ?? {};
 	cfg.multipliers.animation = clamp(m.animation, 0, 10, d.multipliers.animation);
@@ -71,6 +105,7 @@ function sanitizeConfig(raw) {
 
 	const u = raw.ui ?? {};
 	cfg.ui.radius = clamp(u.radius, 0, 64, d.ui.radius);
+	cfg.ui.padding = clamp(u.padding, 0, 24, d.ui.padding);
 	cfg.ui.opacitySolid = clamp(u.opacitySolid, 0, 1, d.ui.opacitySolid);
 	cfg.ui.opacityFloating = clamp(u.opacityFloating, 0, 1, d.ui.opacityFloating);
 	cfg.ui.opacityBackground = clamp(u.opacityBackground, 0, 1, d.ui.opacityBackground);
@@ -81,11 +116,20 @@ function sanitizeConfig(raw) {
 		if (SCHEMES.includes(s)) cfg.slots[slot] = s;
 	}
 
+	cfg.toggles.hideNotification = raw.toggles?.hideNotification === true;
+	cfg.toggles.hideStatusbar = raw.toggles?.hideStatusbar === true;
+
 	for (const [k, v] of Object.entries(raw.customVars ?? {})) {
+		if (Object.keys(cfg.customVars).length >= 64) break;
 		if (/^--[A-Za-z0-9_-]{1,64}$/.test(k) && typeof v === "string" && !/[;{}<>]/.test(v))
 			cfg.customVars[k] = v.slice(0, 256);
-		if (Object.keys(cfg.customVars).length >= 64) break;
 	}
+
+	// Raw CSS is served only as text/css (never echoed into HTML). We still
+	// strip anything that could break out of the stylesheet context.
+	if (typeof raw.customCSS === "string" && raw.customCSS.trim())
+		cfg.customCSS = raw.customCSS.replace(/<\/?(style|script)/gi, "").slice(0, 20000);
+
 	return cfg;
 }
 
@@ -95,27 +139,52 @@ export function generateOverrides(cfg) {
 	const dark = [];
 	const light = [];
 
-	if (cfg.motd !== null)
+	// text broadcasts / toggles
+	if (cfg.toggles.hideNotification) root.push(`--Misono-MOTD: none;`);
+	else if (cfg.motd !== null)
 		root.push(`--Misono-MOTD: ${cfg.motd === "" ? "none" : cssString(cfg.motd)};`);
-	if (cfg.statusbar !== null)
-		root.push(`--Misono-Statusbar: ${cssString(cfg.statusbar)};`);
-	if (cfg.branch !== null)
-		root.push(`--Misono-Branch: ${cssString(cfg.branch)};`);
-	if (cfg.background !== null)
-		root.push(`--Misono-Background: url("${cfg.background}");`);
 
+	if (cfg.toggles.hideStatusbar) root.push(`--Misono-Statusbar: none;`);
+	else if (cfg.statusbar !== null)
+		root.push(`--Misono-Statusbar: ${cfg.statusbar === "" ? "none" : cssString(cfg.statusbar)};`);
+
+	if (cfg.branch !== null) root.push(`--Misono-Branch: ${cssString(cfg.branch)};`);
+	if (cfg.font !== null) root.push(`--Misono-Font: ${cfg.font};`);
+
+	// background (compose dim overlay + image into one value)
+	if (cfg.background !== null) {
+		const dim = cfg.backgroundDim > 0
+			? `linear-gradient(rgba(0,0,0,${cfg.backgroundDim}),rgba(0,0,0,${cfg.backgroundDim})), `
+			: "";
+		root.push(`--Misono-Background: ${dim}url("${cfg.background}") center / cover fixed;`);
+	}
+
+	// feel
 	root.push(
 		`--SNDL-Animation_Multiplier: ${cfg.multipliers.animation};`,
 		`--SNDL-Transition_Multiplier: ${cfg.multipliers.transition};`,
 		`--SNDL-Blur_Multiplier: ${cfg.multipliers.blur};`,
 		`--SNDL-UI_Border-Radius: ${cfg.ui.radius}px;`,
+		`--SNDL-UI_Padding: ${cfg.ui.padding}px;`,
+		`--SNDL-UI_Margin: ${cfg.ui.padding}px;`,
 		`--SNDL-UI_Opacity_Solid: ${cfg.ui.opacitySolid};`,
 		`--SNDL-UI_Opacity_Floating: ${cfg.ui.opacityFloating};`,
 		`--SNDL-UI_Opacity_Background: ${cfg.ui.opacityBackground};`,
 		`--SNDL-UI_Opacity_Hint: ${cfg.ui.opacityHint};`,
 	);
 
-	// Remap SNDL color slots to schemes (dark: Moon/Night/Abyss, light: Sun/Day/Sky).
+	// accent — recolor the theme's accent surfaces (matches theme's own format)
+	if (cfg.accent !== null) {
+		root.push(
+			`--Misono-Accent: ${cfg.accent};`,
+			`--brand-500: rgba(${cfg.accent}, var(--SNDL-UI_Opacity_Solid));`,
+			`--text-link: rgb(${cfg.accent});`,
+			`--mention-foreground: rgb(${cfg.accent});`,
+			`--interactive-active: rgb(${cfg.accent});`,
+		);
+	}
+
+	// color slot remap (dark: Moon/Night/Abyss, light: Sun/Day/Sky)
 	for (const [slot, scheme] of Object.entries(cfg.slots)) {
 		if (scheme === DEFAULT_SLOTS[slot]) continue;
 		const S = cap(scheme);
@@ -142,6 +211,7 @@ export function generateOverrides(cfg) {
 	let out = `\n/* === Misono Worker overrides === */\nhtml {\n${root.join("\n")}\n}\n`;
 	if (dark.length) out += `.theme-dark {\n${dark.join("\n")}\n}\n`;
 	if (light.length) out += `.theme-light {\n${light.join("\n")}\n}\n`;
+	if (cfg.customCSS) out += `\n/* --- custom CSS --- */\n${cfg.customCSS}\n`;
 	return out;
 }
 
@@ -160,6 +230,7 @@ const json = (data, status = 200) =>
 	});
 
 async function loadConfig(env) {
+	if (!env.MISONO_KV) return sanitizeConfig(null);
 	const stored = await env.MISONO_KV.get(CONFIG_KEY, "json");
 	return sanitizeConfig(stored);
 }
@@ -183,8 +254,13 @@ export default {
 		}
 
 		if (url.pathname === "/api/config") {
-			if (request.method === "GET") return json(await loadConfig(env));
+			if (request.method === "GET") {
+				const cfg = await loadConfig(env);
+				return json({ ...cfg, _saveEnabled: !!(env.MISONO_KV && env.MISONO_TOKEN) });
+			}
 			if (request.method === "PUT") {
+				if (!env.MISONO_KV)
+					return json({ error: "KV not bound — create the MISONO_KV namespace and redeploy" }, 503);
 				const auth = request.headers.get("Authorization") ?? "";
 				if (!env.MISONO_TOKEN || auth !== `Bearer ${env.MISONO_TOKEN}`)
 					return json({ error: "unauthorized" }, 401);

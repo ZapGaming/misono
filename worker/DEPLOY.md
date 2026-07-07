@@ -1,52 +1,53 @@
 # Deploying Misono from the Cloudflare dashboard
 
-No CLI, no tokens in chat — everything stays in your Cloudflare account.
+No CLI, no tokens in chat — everything stays in your Cloudflare account. The
+Worker deploys **green on the first try even with zero config**; you add KV +
+the admin token afterward to unlock saving from the control panel.
 
-## 1. Create the KV namespace
+## 1. Connect the repo (Workers — *not* Pages)
 
-Dashboard → **Storage & Databases → KV → Create a namespace**.
-Name it `MISONO_KV`. Copy the **Namespace ID** it gives you.
+> ⚠️ If you pick **Pages**, you'll get *"Could not detect a directory containing
+> static files."* Misono is a **Worker**, not a static site. Use the Workers flow.
 
-Paste that id into `worker/wrangler.toml`:
-
-```toml
-[[kv_namespaces]]
-binding = "MISONO_KV"
-id = "the-id-you-just-copied"
-```
-
-Commit and push that change — the dashboard build reads `wrangler.toml`.
-
-## 2. Connect the repo
-
-Dashboard → **Workers & Pages → Create → Workers → Connect to Git** (a.k.a.
-"Import a repository"). Pick `ZapGaming/misono` and the
-`claude/misono-discord-theme-zqadq9` branch (or `main` once merged).
+Dashboard → **Workers & Pages → Create → Workers → Import a repository**.
+Pick `ZapGaming/misono` and the branch (`claude/misono-discord-theme-zqadq9`,
+or `main` once merged).
 
 Build settings:
 
 | Field | Value |
 |---|---|
-| **Root directory** | `worker` |
-| **Build command** | *(leave empty)* — `worker/src/theme.css` is already committed |
-| **Deploy command** | `npx wrangler deploy` *(default; dashboard fills this in)* |
+| **Root directory** | *(leave blank — repo root)* |
+| **Build command** | *(leave empty)* — the compiled theme is committed |
+| **Deploy command** | `npx wrangler deploy` *(dashboard default)* |
 
-> The compiled theme is checked into the repo, so no build step is required.
-> If you edit anything in `src/`, run `node scripts/build.mjs` locally and commit
-> the refreshed `dist/misono.theme.css` + `worker/src/theme.css` before pushing.
+`wrangler.toml` lives at the repo root, so Cloudflare auto-detects a Worker and
+finds `main = "worker/src/index.js"`. Deploy — it will succeed immediately and
+serve the theme at `/theme.css`.
 
-## 3. Set the admin token
+## 2. Add KV (unlocks saving)
 
-After the first deploy: Worker → **Settings → Variables and Secrets → Add** →
-type **Secret**, name **`MISONO_TOKEN`**, value = whatever password you want for
-the control panel. Redeploy if prompted.
+Dashboard → **Storage & Databases → KV → Create a namespace** named
+`MISONO_KV`. Copy its **Namespace ID**, then in `wrangler.toml` uncomment:
 
-This is the token the control panel asks for — it's separate from any Cloudflare
-API token, and it never goes in the repo.
+```toml
+[[kv_namespaces]]
+binding = "MISONO_KV"
+id = "paste-the-id-here"
+```
+
+Commit + push (triggers a redeploy). Until this exists the control panel loads
+but shows a "saving disabled" banner.
+
+## 3. Add the admin token
+
+Worker → **Settings → Variables and Secrets → Add** → type **Secret**, name
+**`MISONO_TOKEN`**, value = whatever password you want for the panel. This is
+separate from any Cloudflare API token and never goes in the repo.
 
 ## 4. Use it
 
-- **Theme URL** (add in Vencord → Themes → Online Themes):
+- **Theme URL** (Vencord → Themes → Online Themes):
   `https://misono.<your-subdomain>.workers.dev/theme.css`
 - **Control panel:** `https://misono.<your-subdomain>.workers.dev/`
   Enter your `MISONO_TOKEN`, tweak, **Save & Publish**. Clients pick up changes
@@ -55,5 +56,7 @@ API token, and it never goes in the repo.
 ## Notes
 
 - Every push to the connected branch triggers a fresh deploy.
+- `/theme.css` is served `Cache-Control: no-store`, so overrides apply fast.
 - KV writes are eventually consistent (a few seconds) — normal.
-- `/theme.css` is served with `Cache-Control: no-store` so overrides apply fast.
+- Editing `src/`? Run `node scripts/build.mjs` locally and commit the refreshed
+  `dist/misono.theme.css` + `worker/src/theme.css` before pushing.

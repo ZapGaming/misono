@@ -1,0 +1,20 @@
+name = "misono"
+main = "worker/src/index.js"
+compatibility_date = "2026-07-01"
+
+# Lets the Worker import the compiled theme + panel as strings.
+rules = [{ type = "Text", globs = ["**/*.css", "**/*.html"], fallthrough = true }]
+
+# --- KV (optional for the first deploy) --------------------------------------
+# The Worker deploys and serves the theme even WITHOUT this. Config just can't
+# be saved until KV exists. To enable saving from the control panel:
+#   Dashboard → Storage & Databases → KV → Create namespace "MISONO_KV",
+#   copy its id below, uncomment the block, and redeploy.
+# [[kv_namespaces]]
+# binding = "MISONO_KV"
+# id = "PASTE_NAMESPACE_ID_HERE"
+
+# --- Admin token -------------------------------------------------------------
+# Required before the control panel can save. Never put the value in this file:
+#   Dashboard → Worker → Settings → Variables and Secrets → add secret
+#   named MISONO_TOKEN.  (CLI: `wrangler secret put MISONO_TOKEN`)

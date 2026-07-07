@@ -36,10 +36,12 @@ client by appending one small `html {}` block.
 | `src/fonts.css` | Self-hosted Roboto `@font-face` set |
 | `src/schemes/*.css` | Character color schemes |
 | `src/themes/dark.css`, `light.css` | Scheme → SNDL slot mappings per Discord theme |
-| `src/dynamic.css` | Runtime hooks the Worker drives (`--Misono-MOTD`, background, …) |
+| `src/dynamic.css` | Runtime hooks the Worker drives (`--Misono-MOTD`, font, background, …) |
 | `scripts/build.mjs` | Zero-dependency compiler → `dist/` + `worker/src/theme.css` |
-| `scripts/test.mjs` | Override-generator tests |
-| `worker/` | Cloudflare Worker: theme endpoint, config API, control panel |
+| `scripts/test.mjs` | Worker override/sanitization/routing tests |
+| `wrangler.toml` | Worker config (repo root, so the dashboard auto-detects it) |
+| `worker/src/` | Worker: `index.js` (endpoints), `panel.html` (control panel), `theme.css` (built) |
+| `worker/DEPLOY.md` | Step-by-step dashboard deploy guide |
 
 ## Building the theme
 
@@ -53,33 +55,48 @@ the full dynamic experience.
 
 ## Deploying the Worker
 
+**Dashboard (recommended, no CLI):** see [`worker/DEPLOY.md`](worker/DEPLOY.md). In short —
+connect the repo via **Workers → Import a repository** (leave root directory and build
+command blank; `wrangler.toml` at the repo root makes Cloudflare detect the Worker), deploy,
+then add the `MISONO_KV` namespace and `MISONO_TOKEN` secret to unlock saving. It deploys
+green with zero config; KV/token just gate the save button.
+
+**CLI:**
+
 ```sh
-cd worker
-wrangler kv namespace create MISONO_KV   # put the returned id into wrangler.toml
-wrangler secret put MISONO_TOKEN         # choose your admin token
+wrangler deploy                          # serves immediately (saving disabled)
+wrangler kv namespace create MISONO_KV   # uncomment + paste id in wrangler.toml
+wrangler secret put MISONO_TOKEN         # choose your control-panel password
 wrangler deploy
 ```
 
 Then in **Vencord → Themes → Online Themes**, add:
 
 ```
-https://<your-worker>.workers.dev/theme.css
+https://misono.<your-subdomain>.workers.dev/theme.css
 ```
 
-Open `https://<your-worker>.workers.dev/` to reach the control panel. Enter your admin
+Open `https://misono.<your-subdomain>.workers.dev/` for the control panel. Enter your admin
 token (stored in your browser only), tweak, and hit **Save & Publish** — clients pick up
 changes whenever Vencord refetches the theme (toggle it or reload to force).
 
 ## What you can control live
 
-- **MOTD** — the fake login notification text (or hide it)
-- **Status bar** text and **branch** label
-- **Background image** (any https URL)
-- **Animation / transition / blur multipliers** (0× to 4×)
-- **Border radius** and the four **UI opacity** levels
+- **Presets** — one-click looks (Sakura, Nebula Night, Glacier, Sharp Mode, Zen…) you can then tweak
+- **MOTD** — the fake login notification text, or hide it entirely
+- **Status bar** text + **branch** label, or hide the status bar
+- **Accent color** — any hex/RGB; recolors links, mentions, brand & active states
+- **Font family** — swap the global font (validated)
+- **Background image** (any https URL) + **dim overlay** (0–1)
+- **Animation / transition / blur multipliers** (0×–4×)
+- **Border radius**, **padding**, and the four **UI opacity** levels
 - **Color slot remapping** — point any SNDL slot at any scheme
   (e.g. `Green → mika` pink-shifts everything green)
+- **Custom CSS** — raw CSS appended to the served theme (token-gated power-user hatch)
 - **Custom variables** — arbitrary `--Var: value` pairs via the API (escape-checked)
+
+All input is sanitized server-side (URL scheme checks, triplet parsing, font/var/CSS
+escaping) before it ever reaches `/theme.css`.
 
 ## License
 
