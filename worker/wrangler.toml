@@ -1,0 +1,13 @@
+name = "misono"
+main = "src/index.js"
+compatibility_date = "2026-07-01"
+
+# Lets the Worker import the compiled theme as a string.
+rules = [{ type = "Text", globs = ["**/*.css", "**/*.html"], fallthrough = true }]
+
+# Create with: wrangler kv namespace create MISONO_KV
+[[kv_namespaces]]
+binding = "MISONO_KV"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+# Set the admin token with: wrangler secret put MISONO_TOKEN

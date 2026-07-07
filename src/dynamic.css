@@ -1,0 +1,27 @@
+/* Misono Dynamic Layer
+ Runtime hooks consumed by the Misono Worker (worker/).
+ The Worker appends a generated `html {}` block after this file that sets any
+ of the --Misono-* / --SNDL-* variables below, letting the theme be
+ reconfigured live from the control panel without recompiling. */
+
+/* MOTD — overrides the fake login notification text.
+ Set --Misono-MOTD to a quoted string from the Worker to broadcast a message,
+ or to `none` to hide the notification entirely. */
+#app-mount > div:not([class])::before {
+	content: var(--Misono-MOTD, "[Misono " var(--Misono-Branch) " v" var(--Misono-Version) "] Logged on successfully!");
+}
+
+/* Status bar text — the 💫 line in the title bar. */
+[class^="bar_"] > [class^="title_"]::before {
+	content: var(--Misono-Statusbar, "💫  Misono " var(--Misono-Branch) " v" var(--Misono-Version));
+}
+
+/* Optional background image.
+ Set --Misono-Background to url("...") from the Worker; falls back to the
+ scheme's solid background when unset. */
+:root {
+	background: var(--Misono-Background, var(--SNC-Solid));
+	background-size: cover;
+	background-position: center;
+	background-attachment: fixed;
+}

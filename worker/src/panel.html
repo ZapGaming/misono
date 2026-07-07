@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Misono Control</title>
+<style>
+	:root {
+		--abyss: 20, 0, 20; --night: 30, 10, 30; --moon: 40, 15, 40;
+		--sky: 60, 25, 60; --day: 70, 30, 70; --sun: 80, 35, 80;
+		--pink: 255, 130, 200; --text: rgba(245, 230, 245, 0.95);
+		--radius: 22px; --pad: 16px;
+	}
+	* { box-sizing: border-box; }
+	body {
+		margin: 0; min-height: 100vh; font-family: "Roboto", "Segoe UI", sans-serif;
+		color: var(--text);
+		background: linear-gradient(160deg, rgb(var(--abyss)), rgb(var(--night)) 60%, rgb(var(--moon)));
+		background-attachment: fixed;
+		display: flex; justify-content: center; padding: 32px 16px;
+	}
+	main { width: 100%; max-width: 760px; }
+	h1 {
+		font-weight: 900; letter-spacing: 0.04em; margin: 0 0 4px;
+		background: linear-gradient(90deg, rgb(var(--pink)), rgba(var(--pink), 0.5));
+		-webkit-background-clip: text; background-clip: text; color: transparent;
+	}
+	.sub { opacity: 0.6; margin: 0 0 24px; font-size: 0.9rem; }
+	section {
+		background: rgba(var(--moon), 0.5); border: 1px solid rgba(var(--sun), 0.25);
+		border-radius: var(--radius); padding: var(--pad); margin-bottom: 16px;
+		backdrop-filter: blur(8px);
+	}
+	section h2 { margin: 0 0 12px; font-size: 1rem; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.1em; }
+	label { display: block; font-size: 0.8rem; opacity: 0.7; margin: 10px 0 4px; }
+	input[type=text], input[type=url], input[type=password], textarea, select {
+		width: 100%; padding: 9px 12px; border-radius: 12px; font: inherit; font-size: 0.9rem;
+		background: rgba(var(--abyss), 0.6); color: var(--text);
+		border: 1px solid rgba(var(--sun), 0.3); outline: none;
+		transition: border-color 0.2s;
+	}
+	input:focus, textarea:focus, select:focus { border-color: rgba(var(--pink), 0.8); }
+	textarea { resize: vertical; min-height: 72px; }
+	.row { display: flex; gap: 12px; flex-wrap: wrap; }
+	.row > div { flex: 1 1 150px; }
+	.slider-row { display: flex; align-items: center; gap: 10px; }
+	input[type=range] { flex: 1; accent-color: rgb(var(--pink)); }
+	.val { min-width: 44px; text-align: right; font-variant-numeric: tabular-nums; font-size: 0.85rem; opacity: 0.85; }
+	.slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+	button {
+		font: inherit; font-weight: 700; cursor: pointer; border: none;
+		padding: 12px 28px; border-radius: 999px; color: rgb(var(--abyss));
+		background: linear-gradient(90deg, rgb(var(--pink)), rgba(var(--pink), 0.7));
+		transition: transform 0.15s, filter 0.15s;
+	}
+	button:hover { transform: translateY(-1px); filter: brightness(1.1); }
+	button:disabled { opacity: 0.5; cursor: wait; transform: none; }
+	#status { margin-left: 12px; font-size: 0.85rem; }
+	#status.ok { color: rgb(140, 255, 180); }
+	#status.err { color: rgb(255, 130, 130); }
+	.footer { text-align: center; opacity: 0.4; font-size: 0.75rem; margin-top: 24px; }
+	.hint { font-size: 0.75rem; opacity: 0.5; margin-top: 4px; }
+</style>
+</head>
+<body>
+<main>
+	<h1>MISONO</h1>
+	<p class="sub">The Sirio Network — live theme control</p>
+
+	<section>
+		<h2>Auth</h2>
+		<label for="token">Admin token</label>
+		<input type="password" id="token" placeholder="Bearer token (stored locally)">
+	</section>
+
+	<section>
+		<h2>Messages</h2>
+		<label for="motd">MOTD — login notification</label>
+		<textarea id="motd" placeholder="Leave empty for theme default; check “hide” to disable"></textarea>
+		<label style="display:flex;align-items:center;gap:8px;margin-top:8px">
+			<input type="checkbox" id="motdHide" style="width:auto"> hide notification entirely
+		</label>
+		<label for="statusbar">Status bar text</label>
+		<input type="text" id="statusbar" placeholder="💫  Misono Eleison …">
+		<label for="branch">Branch label</label>
+		<input type="text" id="branch" placeholder="Eleison">
+	</section>
+
+	<section>
+		<h2>Background</h2>
+		<label for="background">Image URL (https)</label>
+		<input type="url" id="background" placeholder="https://…  (empty = scheme solid color)">
+	</section>
+
+	<section>
+		<h2>Feel</h2>
+		<div class="row">
+			<div><label>Animation speed ×</label><div class="slider-row"><input type="range" id="m_animation" min="0" max="4" step="0.05" value="1"><span class="val"></span></div></div>
+			<div><label>Transition speed ×</label><div class="slider-row"><input type="range" id="m_transition" min="0" max="4" step="0.05" value="1"><span class="val"></span></div></div>
+			<div><label>Blur ×</label><div class="slider-row"><input type="range" id="m_blur" min="0" max="4" step="0.05" value="1"><span class="val"></span></div></div>
+		</div>
+		<div class="row">
+			<div><label>Border radius (px)</label><div class="slider-row"><input type="range" id="u_radius" min="0" max="64" step="1" value="33"><span class="val"></span></div></div>
+			<div><label>Opacity — solid</label><div class="slider-row"><input type="range" id="u_opacitySolid" min="0" max="1" step="0.01" value="0.8"><span class="val"></span></div></div>
+			<div><label>Opacity — floating</label><div class="slider-row"><input type="range" id="u_opacityFloating" min="0" max="1" step="0.01" value="0.5"><span class="val"></span></div></div>
+			<div><label>Opacity — background</label><div class="slider-row"><input type="range" id="u_opacityBackground" min="0" max="1" step="0.01" value="0.25"><span class="val"></span></div></div>
+			<div><label>Opacity — hint</label><div class="slider-row"><input type="range" id="u_opacityHint" min="0" max="1" step="0.01" value="0.1"><span class="val"></span></div></div>
+		</div>
+	</section>
+
+	<section>
+		<h2>Color Slots</h2>
+		<p class="hint">Remap any SNDL color slot to a character scheme — e.g. set Green to “mika” to pink-shift everything green.</p>
+		<div class="slots" id="slots"></div>
+	</section>
+
+	<section style="display:flex;align-items:center">
+		<button id="save">Save &amp; Publish</button>
+		<span id="status"></span>
+	</section>
+
+	<p class="footer">FROM ASCELLAYN, WITH LOVE</p>
+</main>
+
+<script>
+const SCHEMES = ["arellyan","ascellyan","sagittariian","wakamo","maple","seia","otogi","glacier","marine","nebula","mika"];
+const SLOTS = ["Black","White","Grey","Red","Orange","Yellow","Green","Cyan","Blue","Purple","Pink"];
+const $ = (id) => document.getElementById(id);
+
+// build slot selects
+for (const slot of SLOTS) {
+	const wrap = document.createElement("div");
+	const label = document.createElement("label");
+	label.textContent = slot;
+	const sel = document.createElement("select");
+	sel.id = "slot_" + slot;
+	for (const s of SCHEMES) {
+		const o = document.createElement("option");
+		o.value = s; o.textContent = s;
+		sel.appendChild(o);
+	}
+	wrap.append(label, sel);
+	$("slots").appendChild(wrap);
+}
+
+// live slider value labels
+for (const r of document.querySelectorAll("input[type=range]")) {
+	const update = () => r.parentElement.querySelector(".val").textContent = r.value;
+	r.addEventListener("input", update); update();
+}
+
+$("token").value = localStorage.getItem("misono_token") ?? "";
+$("token").addEventListener("change", () => localStorage.setItem("misono_token", $("token").value));
+
+function applyConfig(cfg) {
+	$("motd").value = cfg.motd && cfg.motd !== "" ? cfg.motd : "";
+	$("motdHide").checked = cfg.motd === "";
+	$("statusbar").value = cfg.statusbar ?? "";
+	$("branch").value = cfg.branch ?? "";
+	$("background").value = cfg.background ?? "";
+	for (const k of ["animation","transition","blur"]) $("m_" + k).value = cfg.multipliers[k];
+	for (const k of ["radius","opacitySolid","opacityFloating","opacityBackground","opacityHint"]) $("u_" + k).value = cfg.ui[k];
+	for (const slot of SLOTS) $("slot_" + slot).value = cfg.slots[slot];
+	for (const r of document.querySelectorAll("input[type=range]")) r.dispatchEvent(new Event("input"));
+}
+
+function collectConfig() {
+	return {
+		motd: $("motdHide").checked ? "" : ($("motd").value || null),
+		statusbar: $("statusbar").value || null,
+		branch: $("branch").value || null,
+		background: $("background").value || null,
+		multipliers: Object.fromEntries(["animation","transition","blur"].map(k => [k, Number($("m_" + k).value)])),
+		ui: Object.fromEntries(["radius","opacitySolid","opacityFloating","opacityBackground","opacityHint"].map(k => [k, Number($("u_" + k).value)])),
+		slots: Object.fromEntries(SLOTS.map(s => [s, $("slot_" + s).value])),
+	};
+}
+
+const status = (msg, cls) => { const el = $("status"); el.textContent = msg; el.className = cls; };
+
+fetch("/api/config").then(r => r.json()).then(applyConfig).catch(() => status("failed to load config", "err"));
+
+$("save").addEventListener("click", async () => {
+	$("save").disabled = true;
+	status("publishing…", "");
+	try {
+		const res = await fetch("/api/config", {
+			method: "PUT",
+			headers: { "Content-Type": "application/json", "Authorization": "Bearer " + $("token").value },
+			body: JSON.stringify(collectConfig()),
+		});
+		const data = await res.json();
+		if (!res.ok) throw new Error(data.error ?? res.status);
+		applyConfig(data);
+		status("published ✓ — clients update on next theme refresh", "ok");
+	} catch (e) {
+		status("error: " + e.message, "err");
+	} finally {
+		$("save").disabled = false;
+	}
+});
+</script>
+</body>
+</html>

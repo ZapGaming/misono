@@ -1,0 +1,13 @@
+{
+	"name": "misono",
+	"version": "260707.0.0",
+	"description": "The Sirio Network's dynamic Discord theme — successor to Flashcord",
+	"type": "module",
+	"scripts": {
+		"build": "node scripts/build.mjs",
+		"test": "node scripts/test.mjs",
+		"deploy": "npm run build && wrangler deploy --config worker/wrangler.toml"
+	},
+	"author": "Ascellayn // The Sirio Network",
+	"license": "SEE LICENSE IN README.md"
+}
