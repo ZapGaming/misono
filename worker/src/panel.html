@@ -86,6 +86,16 @@
 	</div>
 
 	<section>
+		<h2>Theme URL <span style="opacity:.5;font-weight:400;text-transform:none;letter-spacing:0">— paste once, never changes</span></h2>
+		<p class="hint">Add this in <b>Vencord → Themes → Online Themes</b>. It's a fixed link —
+			everything you Save &amp; Publish below updates it live for every client.</p>
+		<div class="slider-row">
+			<input type="text" id="themeUrl" readonly style="flex:1;font-family:ui-monospace,monospace;font-size:.8rem">
+			<button class="primary" id="copyUrl" style="padding:9px 18px">Copy</button>
+		</div>
+	</section>
+
+	<section>
 		<h2>Auth</h2>
 		<label for="token">Admin token</label>
 		<input type="password" id="token" placeholder="MISONO_TOKEN (stored in this browser only)">
@@ -271,6 +281,13 @@ function collectConfig() {
 }
 
 const status = (msg, cls) => { const el = $("status"); el.textContent = msg; el.className = cls; };
+
+// stable theme URL — fixed link, content changes when you publish
+$("themeUrl").value = location.origin + "/theme.css";
+$("copyUrl").addEventListener("click", async () => {
+	try { await navigator.clipboard.writeText($("themeUrl").value); status("theme URL copied — paste into Vencord", "ok"); }
+	catch { $("themeUrl").select(); status("select + copy the URL above", ""); }
+});
 
 fetch("/api/config").then(r => r.json()).then(cfg => {
 	applyConfig(cfg);
