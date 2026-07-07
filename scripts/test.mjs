@@ -56,6 +56,21 @@ assert.equal(sanitizeConfig({ font: "x; } body{display:none" }).font, null);
 out = generateOverrides(cfg({ background: "https://x/y.png", backgroundDim: 0.4 }));
 assert.ok(out.includes('--Misono-Background: linear-gradient(rgba(0,0,0,0.4),rgba(0,0,0,0.4)), url("https://x/y.png") center / cover fixed;'));
 
+// base surface color repaints SNC in BOTH theme blocks, with auto-contrast text
+out = generateOverrides(sanitizeConfig({ surface: "#1a0f26" }));
+assert.ok(out.includes("--SNC-Primary: 26, 15, 38;"));
+assert.ok(/\.theme-dark \{[^}]*--SNC-Primary: 26, 15, 38;/s.test(out));
+assert.ok(/\.theme-light \{[^}]*--SNC-Primary: 26, 15, 38;/s.test(out));
+assert.ok(out.includes("--SNC-Text: rgb(231, 227, 233);")); // dark surface → light text
+// light surface → dark text
+out = generateOverrides(sanitizeConfig({ surface: "#eeeeee" }));
+assert.ok(out.includes("--SNC-Text: rgb(26, 20, 30);"));
+// explicit text color overrides auto
+out = generateOverrides(sanitizeConfig({ surface: "#1a0f26", textColor: "#00ff00" }));
+assert.ok(out.includes("--SNC-Text: rgb(0, 255, 0);"));
+// no surface → SNC untouched
+assert.ok(!generateOverrides(cfg()).includes("--SNC-Primary:"));
+
 // slot remap emits dark + light with right stops
 out = generateOverrides(cfg({ slots: { ...DEFAULT_SLOTS, Green: "mika" } }));
 assert.ok(out.includes("--SNDL-Green_Primary: var(--Mika-Moon);"));

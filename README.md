@@ -85,6 +85,7 @@ changes whenever Vencord refetches the theme (toggle it or reload to force).
 - **Presets** — one-click looks (Sakura, Nebula Night, Glacier, Sharp Mode, Zen, Vaporwave, Monochrome, OLED) you can then tweak
 - **MOTD** — the fake login notification text, or hide it entirely
 - **Status bar** text + **branch** label, or hide the status bar
+- **Base color** — one pick repaints every surface in **both** light & dark mode (auto-contrasting text); the fastest way to recolor the whole client
 - **Accent color** — any hex/RGB; recolors links, mentions, brand & active states
 - **Font family** — swap the global font (validated)
 - **Background** — image URL **or** a two-color **gradient builder** (angle + colors), with a **dim overlay**

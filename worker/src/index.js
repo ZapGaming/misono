@@ -51,6 +51,8 @@ export const DEFAULT_CONFIG = {
 	branch: null,        // override --Misono-Branch label
 	background: null,    // https URL or null
 	backgroundDim: 0,    // 0..1 dark overlay over the background image
+	surface: null,       // base UI color "R, G, B" — repaints all surfaces, both modes
+	textColor: null,     // text color triplet; null = auto-contrast from surface
 	accent: null,        // "R, G, B" triplet or null (keep theme's cyan accent)
 	font: null,          // font-family string, e.g. 'Comic Sans MS'
 	multipliers: { animation: 1, transition: 1, blur: 1 },
@@ -132,6 +134,8 @@ export function sanitizeConfig(raw) {
 	if (typeof raw.background === "string" && /^https:\/\/[^"\\)]+$/.test(raw.background))
 		cfg.background = raw.background.slice(0, 1024);
 	cfg.backgroundDim = clamp(raw.backgroundDim, 0, 1, d.backgroundDim);
+	cfg.surface = parseTriplet(raw.surface);
+	cfg.textColor = parseTriplet(raw.textColor);
 	cfg.accent = parseTriplet(raw.accent);
 	if (isSafeFont(raw.font)) cfg.font = raw.font;
 
@@ -199,11 +203,46 @@ export function sanitizeConfig(raw) {
 	return cfg;
 }
 
+// Build a 3-step surface ramp + contrasting text from one base color.
+// Dark bases layer lighter; light bases layer darker. Text auto-contrasts.
+export function rampFromBase(triplet) {
+	const [r, g, b] = triplet.split(",").map((n) => +n.trim());
+	const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b; // perceived luminance
+	const dark = lum < 140;
+	const toward = dark ? 255 : 0;
+	const step = (amt) => [r, g, b].map((c) => Math.round(c + (toward - c) * amt)).join(", ");
+	return {
+		primary: `${r}, ${g}, ${b}`,
+		secondary: step(0.07),
+		tertiary: step(0.14),
+		text: dark ? "231, 227, 233" : "26, 20, 30",
+		header: dark ? "247, 244, 249" : "12, 8, 16",
+	};
+}
+
 /* Generates the live override block appended to the compiled theme. */
 export function generateOverrides(cfg) {
 	const root = [];
 	const dark = [];
 	const light = [];
+
+	// Base surface color — repaints the dominant SNC surfaces in BOTH modes.
+	// Emitted in .theme-dark/.theme-light so it out-specifies the theme's own
+	// class-scoped definitions (an html{} rule would lose to them).
+	if (cfg.surface !== null) {
+		const ramp = rampFromBase(cfg.surface);
+		const text = cfg.textColor ?? ramp.text;
+		const block = [
+			`--SNC-Primary: ${ramp.primary};`,
+			`--SNC-Secondary: ${ramp.secondary};`,
+			`--SNC-Tertiary: ${ramp.tertiary};`,
+			`--SNC-Solid: rgb(${ramp.primary});`,
+			`--SNC-Text: rgb(${text});`,
+			`--SNC-Header: rgb(${ramp.header});`,
+		];
+		dark.push(...block);
+		light.push(...block);
+	}
 
 	// text broadcasts / toggles
 	if (cfg.toggles.hideNotification) root.push(`--Misono-MOTD: none;`);

@@ -108,6 +108,22 @@
 	</section>
 
 	<section>
+		<h2>Base Color <span style="opacity:.5;font-weight:400;text-transform:none;letter-spacing:0">— the big one</span></h2>
+		<p class="hint">Repaints every surface in <b>both</b> light &amp; dark mode from one color, with auto-contrasting text.
+			This is the fastest way to recolor the whole client. Empty = keep the scheme system below.</p>
+		<div class="row">
+			<div>
+				<label>Surface color</label>
+				<div class="slider-row"><input type="color" id="surfacePick" value="#1a0f26"><input type="text" id="surface" placeholder="empty = off; #1a0f26 or 26,15,38" style="flex:1"></div>
+			</div>
+			<div>
+				<label>Text color <span style="opacity:.6">(optional)</span></label>
+				<div class="slider-row"><input type="color" id="textColorPick" value="#e7e3e9"><input type="text" id="textColor" placeholder="empty = auto-contrast" style="flex:1"></div>
+			</div>
+		</div>
+	</section>
+
+	<section>
 		<h2>Messages</h2>
 		<label for="motd">MOTD — login notification</label>
 		<textarea id="motd" placeholder="Leave empty for theme default"></textarea>
@@ -293,9 +309,11 @@ for (const stop of STOPS) {
 }
 for (const stop of STOPS) bindColorPair(`cs_${stop}Pick`, `cs_${stop}`);
 
-// gradient color pairs
+// gradient + base-color pairs
 bindColorPair("bg_fromPick", "bg_from");
 bindColorPair("bg_toPick", "bg_to");
+bindColorPair("surfacePick", "surface");
+bindColorPair("textColorPick", "textColor");
 
 // live slider labels
 for (const id of RANGES) {
@@ -320,6 +338,7 @@ function mergeDefaults(p) {
 	return {
 		motd: p.motd ?? null, statusbar: p.statusbar ?? null, branch: p.branch ?? null,
 		background: p.background ?? null, backgroundDim: p.backgroundDim ?? 0,
+		surface: p.surface ?? null, textColor: p.textColor ?? null,
 		accent: p.accent ?? null, font: p.font ?? null,
 		zoom: p.zoom ?? 1, letterSpacing: p.letterSpacing ?? 0, avatarShape: p.avatarShape ?? "round",
 		multipliers: { animation: 1, transition: 1, blur: 1, ...(p.multipliers||{}) },
@@ -344,6 +363,8 @@ function applyConfig(cfg) {
 	$("backgroundDim").value = cfg.backgroundDim ?? 0;
 	$("accent").value = cfg.accent ?? "";
 	if (cfg.accent) { const h = tripletToHex(cfg.accent); if (h) { $("accentPick").value = h; tintLogo(); } }
+	$("surface").value = cfg.surface ?? ""; if (cfg.surface && tripletToHex(cfg.surface)) $("surfacePick").value = tripletToHex(cfg.surface);
+	$("textColor").value = cfg.textColor ?? ""; if (cfg.textColor && tripletToHex(cfg.textColor)) $("textColorPick").value = tripletToHex(cfg.textColor);
 	$("font").value = cfg.font ?? "";
 	$("zoom").value = cfg.zoom ?? 1;
 	$("letterSpacing").value = cfg.letterSpacing ?? 0;
@@ -371,6 +392,8 @@ function collectConfig() {
 		branch: $("branch").value || null,
 		background: $("background").value || null,
 		backgroundDim: Number($("backgroundDim").value),
+		surface: $("surface").value || null,
+		textColor: $("textColor").value || null,
 		accent: $("accent").value || null,
 		font: $("font").value || null,
 		zoom: Number($("zoom").value),
