@@ -232,16 +232,23 @@ export function generateOverrides(cfg) {
 	if (cfg.surface !== null) {
 		const ramp = rampFromBase(cfg.surface);
 		const text = cfg.textColor ?? ramp.text;
-		const block = [
+		root.push(
 			`--SNC-Primary: ${ramp.primary};`,
 			`--SNC-Secondary: ${ramp.secondary};`,
 			`--SNC-Tertiary: ${ramp.tertiary};`,
 			`--SNC-Solid: rgb(${ramp.primary});`,
 			`--SNC-Text: rgb(${text});`,
 			`--SNC-Header: rgb(${ramp.header});`,
-		];
-		dark.push(...block);
-		light.push(...block);
+			// the big surfaces SNC doesn't cover (the app frame is GREEN by
+			// default) — recolor them too so the change isn't subtle
+			`--app-frame-background: rgb(${ramp.secondary});`,
+			`--app-frame-border: rgb(${ramp.tertiary});`,
+			`--home-background: rgb(${ramp.primary});`,
+			`--channel-background-default: rgb(${ramp.primary});`,
+			`--background-base-lowest: rgb(${ramp.primary});`,
+			`--background-base-lower: rgb(${ramp.primary});`,
+			`--background-base-low: rgb(${ramp.secondary});`,
+		);
 	}
 
 	// text broadcasts / toggles
@@ -260,11 +267,24 @@ export function generateOverrides(cfg) {
 	const dim = cfg.backgroundDim > 0
 		? `linear-gradient(rgba(0,0,0,${cfg.backgroundDim}),rgba(0,0,0,${cfg.backgroundDim})), `
 		: "";
+	const bgActive = cfg.backgroundGradient.enabled || cfg.background !== null;
 	if (cfg.backgroundGradient.enabled) {
 		const { from, to, angle } = cfg.backgroundGradient;
-		root.push(`--Misono-Background: ${dim}linear-gradient(${angle}deg, rgb(${from}), rgb(${to})) fixed;`);
+		root.push(`--Misono-Background: ${dim}linear-gradient(${angle}deg, rgb(${from}), rgb(${to}));`);
 	} else if (cfg.background !== null) {
-		root.push(`--Misono-Background: ${dim}url("${cfg.background}") center / cover fixed;`);
+		root.push(`--Misono-Background: ${dim}url("${cfg.background}") center / cover;`);
+	}
+	// Make the opaque base surfaces transparent so the background shows through.
+	// Pushed AFTER the surface block so it wins when both are set.
+	if (bgActive) {
+		root.push(
+			`--background-base-lowest: transparent;`,
+			`--background-base-lower: transparent;`,
+			`--background-base-low: transparent;`,
+			`--app-frame-background: transparent;`,
+			`--home-background: transparent;`,
+			`--channel-background-default: transparent;`,
+		);
 	}
 
 	// scale / typography effects
@@ -341,7 +361,11 @@ export function generateOverrides(cfg) {
 
 	for (const [k, v] of Object.entries(cfg.customVars)) root.push(`${k}: ${v};`);
 
-	let out = `\n/* === Misono Worker overrides === */\nhtml {\n${root.join("\n")}\n}\n`;
+	// Emitted as :root (specificity 0,1,0) and appended last, so it wins over
+	// the theme's own :root and ".theme-light, .theme-dark" definitions
+	// (equal specificity → later source order wins). An html{} block (0,0,1)
+	// would LOSE to those and the overrides would silently do nothing.
+	let out = `\n/* === Misono Worker overrides === */\n:root {\n${root.join("\n")}\n}\n`;
 	if (dark.length) out += `.theme-dark {\n${dark.join("\n")}\n}\n`;
 	if (light.length) out += `.theme-light {\n${light.join("\n")}\n}\n`;
 	if (cfg.customCSS) out += `\n/* --- custom CSS --- */\n${cfg.customCSS}\n`;

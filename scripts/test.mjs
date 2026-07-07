@@ -54,13 +54,18 @@ assert.equal(sanitizeConfig({ font: "x; } body{display:none" }).font, null);
 
 // background with dim composes overlay + image
 out = generateOverrides(cfg({ background: "https://x/y.png", backgroundDim: 0.4 }));
-assert.ok(out.includes('--Misono-Background: linear-gradient(rgba(0,0,0,0.4),rgba(0,0,0,0.4)), url("https://x/y.png") center / cover fixed;'));
+assert.ok(out.includes('--Misono-Background: linear-gradient(rgba(0,0,0,0.4),rgba(0,0,0,0.4)), url("https://x/y.png") center / cover;'));
 
-// base surface color repaints SNC in BOTH theme blocks, with auto-contrast text
+// overrides emit under :root (wins the cascade), not html{}
+out = generateOverrides(cfg());
+assert.ok(out.includes(":root {") && !/\bhtml \{/.test(out));
+
+// base surface color repaints SNC + the big independent surfaces (green frame!)
 out = generateOverrides(sanitizeConfig({ surface: "#1a0f26" }));
 assert.ok(out.includes("--SNC-Primary: 26, 15, 38;"));
-assert.ok(/\.theme-dark \{[^}]*--SNC-Primary: 26, 15, 38;/s.test(out));
-assert.ok(/\.theme-light \{[^}]*--SNC-Primary: 26, 15, 38;/s.test(out));
+assert.ok(/:root \{[^}]*--SNC-Primary: 26, 15, 38;/s.test(out));
+assert.ok(out.includes("--app-frame-background: rgb("));       // the green frame gets recolored
+assert.ok(out.includes("--home-background: rgb("));
 assert.ok(out.includes("--SNC-Text: rgb(231, 227, 233);")); // dark surface → light text
 // light surface → dark text
 out = generateOverrides(sanitizeConfig({ surface: "#eeeeee" }));
@@ -104,9 +109,19 @@ assert.ok(out.includes("--status-online: rgba(0, 255, 0, var(--SNDL-UI_Opacity_S
 assert.ok(out.includes("--icon-status-online: rgba(0, 255, 0, var(--SNDL-UI_Opacity_Solid));"));
 assert.ok(out.includes("--icon-status-dnd: rgba(255, 0, 0, var(--SNDL-UI_Opacity_Solid));"));
 
-// gradient background wins over image, with dim overlay
+// gradient background wins over image, with dim overlay; base surfaces go transparent
 out = generateOverrides(sanitizeConfig({ background: "https://x/y.png", backgroundDim: 0.2, backgroundGradient: { enabled: true, from: "#000000", to: "#ffffff", angle: 90 } }));
-assert.ok(out.includes("--Misono-Background: linear-gradient(rgba(0,0,0,0.2),rgba(0,0,0,0.2)), linear-gradient(90deg, rgb(0, 0, 0), rgb(255, 255, 255)) fixed;"));
+assert.ok(out.includes("--Misono-Background: linear-gradient(rgba(0,0,0,0.2),rgba(0,0,0,0.2)), linear-gradient(90deg, rgb(0, 0, 0), rgb(255, 255, 255));"));
+assert.ok(out.includes("--background-base-lower: transparent;") && out.includes("--app-frame-background: transparent;"));
+// image background also triggers transparency
+out = generateOverrides(sanitizeConfig({ background: "https://x/y.png" }));
+assert.ok(out.includes('--Misono-Background: url("https://x/y.png") center / cover;'));
+assert.ok(out.includes("--background-base-lowest: transparent;"));
+// no background → no transparency overrides
+assert.ok(!generateOverrides(cfg()).includes("transparent"));
+// background transparency wins over surface when both set (transparency emitted later)
+out = generateOverrides(sanitizeConfig({ surface: "#112233", background: "https://x/y.png" }));
+assert.ok(out.lastIndexOf("--background-base-lower: transparent;") > out.lastIndexOf("--background-base-lower: rgb("));
 // gradient ignored unless both colors valid
 assert.equal(sanitizeConfig({ backgroundGradient: { enabled: true, from: "#000000" } }).backgroundGradient.enabled, false);
 

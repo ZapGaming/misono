@@ -357,22 +357,20 @@ div[class^="appAsidePanelWrapper_"] {div[class^="notAppAsidePanel_"] > div[class
 /* --- Background ----------------------------------------------------------- */
 
 /* Optional background image / gradient. The Worker composes dim + image into a
- single value; falls back to the active scheme's solid color when unset. */
-:root {
-	background: var(--Misono-Background, var(--SNC-Solid));
-	background-size: var(--Misono-Background_Size, cover);
-	background-position: center;
-	background-attachment: fixed;
-}
-
-/* --- Scale & effects ------------------------------------------------------ */
-
-/* UI zoom — scales the whole client. Identity (1) by default, so untouched. */
+ single value; falls back to `transparent` (the opaque theme surfaces show).
+ Applied to #app-mount — the top-level container that fills the window — so it
+ sits behind everything. When a background is set the Worker also makes the base
+ surfaces transparent so the image/gradient actually shows through. */
 #app-mount {
 	zoom: var(--Misono-Zoom, 1);
 	/* Color grade the entire app. `none` by default → no containing-block side
 	 effects; the Worker only sets --Misono-Filter when a grade is chosen. */
 	filter: var(--Misono-Filter, none);
+	background: var(--Misono-Background, transparent);
+	background-size: var(--Misono-Background_Size, cover);
+	background-position: center;
+	background-attachment: fixed;
+	background-repeat: no-repeat;
 }
 
 /* Letter spacing on body text. `normal` unless the Worker overrides it. */
