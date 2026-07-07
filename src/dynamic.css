@@ -35,6 +35,21 @@
 	background-attachment: fixed;
 }
 
+/* --- Scale & effects ------------------------------------------------------ */
+
+/* UI zoom — scales the whole client. Identity (1) by default, so untouched. */
+#app-mount {
+	zoom: var(--Misono-Zoom, 1);
+	/* Color grade the entire app. `none` by default → no containing-block side
+	 effects; the Worker only sets --Misono-Filter when a grade is chosen. */
+	filter: var(--Misono-Filter, none);
+}
+
+/* Letter spacing on body text. `normal` unless the Worker overrides it. */
+:is(p, span, h1, h2, h3, h4, h5, h6, div, button, a) {
+	letter-spacing: var(--Misono-Letter_Spacing, normal);
+}
+
 /* --- Accent --------------------------------------------------------------- */
 
 /* The Worker only emits the block below when an accent is chosen; by default

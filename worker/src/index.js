@@ -26,6 +26,25 @@ export const DEFAULT_SLOTS = {
 	Cyan: "glacier", Blue: "marine", Purple: "nebula", Pink: "mika",
 };
 
+// A slot may also point at the user-editable "custom" scheme.
+export const SLOT_SCHEMES = [...SCHEMES, "custom"];
+
+// Six stops of the editable custom palette (dark→light), triplet strings.
+export const CUSTOM_STOPS = ["abyss", "night", "moon", "sky", "day", "sun"];
+export const DEFAULT_CUSTOM_SCHEME = {
+	abyss: "20, 0, 30", night: "35, 10, 50", moon: "55, 20, 80",
+	sky: "90, 45, 130", day: "130, 80, 180", sun: "170, 120, 230",
+};
+
+// Discord status vars each status color drives.
+const STATUS_VARS = {
+	online: ["--status-online", "--icon-status-online", "--text-status-online"],
+	idle: ["--icon-status-idle", "--text-status-idle"],
+	dnd: ["--status-danger", "--icon-status-dnd", "--text-status-dnd"],
+	offline: ["--icon-status-offline", "--text-status-offline"],
+	streaming: ["--status-speaking", "--icon-voice-speaking", "--text-voice-speaking"],
+};
+
 export const DEFAULT_CONFIG = {
 	motd: null,          // string, "" to hide, null for theme default
 	statusbar: null,     // string, "" to hide, null for theme default
@@ -38,12 +57,30 @@ export const DEFAULT_CONFIG = {
 	ui: {
 		radius: 33,            // px
 		padding: 8,            // px
+		borderSize: 4,         // px
+		outlineSize: 1,        // px
 		opacitySolid: 0.8,
 		opacityFloating: 0.5,
 		opacityBackground: 0.25,
 		opacityHint: 0.1,
 	},
-	slots: { ...DEFAULT_SLOTS }, // SNDL color slot -> scheme
+	zoom: 1,                 // 0.7..1.5 whole-UI scale
+	letterSpacing: 0,        // em, 0 = normal
+	avatarShape: "round",    // round | rounded | square
+	effects: {
+		saturation: 1,         // 0..2
+		contrast: 1,           // 0.5..1.5
+		brightness: 1,         // 0.5..1.5
+		reduceMotion: false,   // near-instant animations/transitions
+	},
+	status: {                // status dot colors (triplet or null = theme default)
+		online: null, idle: null, dnd: null, offline: null, streaming: null,
+	},
+	backgroundGradient: {    // alternative to a background image
+		enabled: false, from: null, to: null, angle: 160,
+	},
+	customScheme: { ...DEFAULT_CUSTOM_SCHEME }, // editable 6-stop palette
+	slots: { ...DEFAULT_SLOTS }, // SNDL color slot -> scheme (incl. "custom")
 	toggles: {
 		hideNotification: false,
 		hideStatusbar: false,
@@ -106,14 +143,43 @@ export function sanitizeConfig(raw) {
 	const u = raw.ui ?? {};
 	cfg.ui.radius = clamp(u.radius, 0, 64, d.ui.radius);
 	cfg.ui.padding = clamp(u.padding, 0, 24, d.ui.padding);
+	cfg.ui.borderSize = clamp(u.borderSize, 0, 8, d.ui.borderSize);
+	cfg.ui.outlineSize = clamp(u.outlineSize, 0, 6, d.ui.outlineSize);
 	cfg.ui.opacitySolid = clamp(u.opacitySolid, 0, 1, d.ui.opacitySolid);
 	cfg.ui.opacityFloating = clamp(u.opacityFloating, 0, 1, d.ui.opacityFloating);
 	cfg.ui.opacityBackground = clamp(u.opacityBackground, 0, 1, d.ui.opacityBackground);
 	cfg.ui.opacityHint = clamp(u.opacityHint, 0, 1, d.ui.opacityHint);
 
+	cfg.zoom = clamp(raw.zoom, 0.7, 1.5, d.zoom);
+	cfg.letterSpacing = clamp(raw.letterSpacing, -0.1, 0.3, d.letterSpacing);
+	if (["round", "rounded", "square"].includes(raw.avatarShape)) cfg.avatarShape = raw.avatarShape;
+
+	const e = raw.effects ?? {};
+	cfg.effects.saturation = clamp(e.saturation, 0, 2, d.effects.saturation);
+	cfg.effects.contrast = clamp(e.contrast, 0.5, 1.5, d.effects.contrast);
+	cfg.effects.brightness = clamp(e.brightness, 0.5, 1.5, d.effects.brightness);
+	cfg.effects.reduceMotion = raw.effects?.reduceMotion === true;
+
+	for (const k of Object.keys(d.status)) {
+		const t = parseTriplet(raw.status?.[k]);
+		if (t) cfg.status[k] = t;
+	}
+
+	const g = raw.backgroundGradient ?? {};
+	cfg.backgroundGradient.from = parseTriplet(g.from);
+	cfg.backgroundGradient.to = parseTriplet(g.to);
+	cfg.backgroundGradient.angle = clamp(g.angle, 0, 360, d.backgroundGradient.angle);
+	cfg.backgroundGradient.enabled =
+		g.enabled === true && !!cfg.backgroundGradient.from && !!cfg.backgroundGradient.to;
+
+	for (const stop of CUSTOM_STOPS) {
+		const t = parseTriplet(raw.customScheme?.[stop]);
+		if (t) cfg.customScheme[stop] = t;
+	}
+
 	for (const slot of Object.keys(DEFAULT_SLOTS)) {
 		const s = raw.slots?.[slot];
-		if (SCHEMES.includes(s)) cfg.slots[slot] = s;
+		if (SLOT_SCHEMES.includes(s)) cfg.slots[slot] = s;
 	}
 
 	cfg.toggles.hideNotification = raw.toggles?.hideNotification === true;
@@ -151,27 +217,55 @@ export function generateOverrides(cfg) {
 	if (cfg.branch !== null) root.push(`--Misono-Branch: ${cssString(cfg.branch)};`);
 	if (cfg.font !== null) root.push(`--Misono-Font: ${cfg.font};`);
 
-	// background (compose dim overlay + image into one value)
-	if (cfg.background !== null) {
-		const dim = cfg.backgroundDim > 0
-			? `linear-gradient(rgba(0,0,0,${cfg.backgroundDim}),rgba(0,0,0,${cfg.backgroundDim})), `
-			: "";
+	// background — gradient builder wins over image; both accept a dim overlay
+	const dim = cfg.backgroundDim > 0
+		? `linear-gradient(rgba(0,0,0,${cfg.backgroundDim}),rgba(0,0,0,${cfg.backgroundDim})), `
+		: "";
+	if (cfg.backgroundGradient.enabled) {
+		const { from, to, angle } = cfg.backgroundGradient;
+		root.push(`--Misono-Background: ${dim}linear-gradient(${angle}deg, rgb(${from}), rgb(${to})) fixed;`);
+	} else if (cfg.background !== null) {
 		root.push(`--Misono-Background: ${dim}url("${cfg.background}") center / cover fixed;`);
 	}
 
-	// feel
+	// scale / typography effects
+	if (cfg.zoom !== 1) root.push(`--Misono-Zoom: ${cfg.zoom};`);
+	if (cfg.letterSpacing !== 0) root.push(`--Misono-Letter_Spacing: ${cfg.letterSpacing}em;`);
+	const fx = cfg.effects;
+	if (fx.saturation !== 1 || fx.contrast !== 1 || fx.brightness !== 1)
+		root.push(`--Misono-Filter: saturate(${fx.saturation}) contrast(${fx.contrast}) brightness(${fx.brightness});`);
+
+	// feel — reduce-motion collapses animation/transition timing to ~instant
+	const anim = fx.reduceMotion ? 0.001 : cfg.multipliers.animation;
+	const trans = fx.reduceMotion ? 0.001 : cfg.multipliers.transition;
 	root.push(
-		`--SNDL-Animation_Multiplier: ${cfg.multipliers.animation};`,
-		`--SNDL-Transition_Multiplier: ${cfg.multipliers.transition};`,
+		`--SNDL-Animation_Multiplier: ${anim};`,
+		`--SNDL-Transition_Multiplier: ${trans};`,
 		`--SNDL-Blur_Multiplier: ${cfg.multipliers.blur};`,
 		`--SNDL-UI_Border-Radius: ${cfg.ui.radius}px;`,
 		`--SNDL-UI_Padding: ${cfg.ui.padding}px;`,
 		`--SNDL-UI_Margin: ${cfg.ui.padding}px;`,
+		`--SNDL-UI_Border-Size: ${cfg.ui.borderSize}px;`,
+		`--SNDL-UI_Outline-Size: ${cfg.ui.outlineSize}px;`,
 		`--SNDL-UI_Opacity_Solid: ${cfg.ui.opacitySolid};`,
 		`--SNDL-UI_Opacity_Floating: ${cfg.ui.opacityFloating};`,
 		`--SNDL-UI_Opacity_Background: ${cfg.ui.opacityBackground};`,
 		`--SNDL-UI_Opacity_Hint: ${cfg.ui.opacityHint};`,
 	);
+
+	// avatar shape via the theme's circle-radius token
+	if (cfg.avatarShape !== "round")
+		root.push(`--SNDL-UI_Border-Radius_Circle: ${cfg.avatarShape === "square" ? 0 : 12}px;`);
+
+	// status dot colors
+	for (const [k, vars] of Object.entries(STATUS_VARS)) {
+		if (cfg.status[k] === null) continue;
+		for (const v of vars) root.push(`${v}: rgba(${cfg.status[k]}, var(--SNDL-UI_Opacity_Solid));`);
+	}
+
+	// custom scheme stops — only emitted when a slot actually points at "custom"
+	if (Object.values(cfg.slots).includes("custom"))
+		for (const stop of CUSTOM_STOPS) root.push(`--Custom-${cap(stop)}: ${cfg.customScheme[stop]};`);
 
 	// accent — recolor the theme's accent surfaces (matches theme's own format)
 	if (cfg.accent !== null) {

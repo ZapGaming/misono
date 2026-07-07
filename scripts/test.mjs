@@ -65,6 +65,42 @@ assert.ok(/\.theme-light \{[^}]*--SNDL-Green_Primary: var\(--Mika-Sun\);/s.test(
 out = generateOverrides(sanitizeConfig({ customCSS: "a{color:red} </style><script>evil" }));
 assert.ok(out.includes("a{color:red}") && !out.includes("</style>") && !out.includes("<script>"));
 
+// zoom / letter-spacing only emitted when non-default; border/outline always in feel
+out = generateOverrides(cfg());
+assert.ok(!out.includes("--Misono-Zoom") && !out.includes("--Misono-Letter_Spacing") && !out.includes("--Misono-Filter"));
+assert.ok(out.includes("--SNDL-UI_Border-Size: 4px;") && out.includes("--SNDL-UI_Outline-Size: 1px;"));
+out = generateOverrides(sanitizeConfig({ zoom: 1.2, letterSpacing: 0.05 }));
+assert.ok(out.includes("--Misono-Zoom: 1.2;") && out.includes("--Misono-Letter_Spacing: 0.05em;"));
+
+// effects → filter; reduce-motion collapses timing
+out = generateOverrides(sanitizeConfig({ effects: { saturation: 1.4, contrast: 1.1, brightness: 0.9 } }));
+assert.ok(out.includes("--Misono-Filter: saturate(1.4) contrast(1.1) brightness(0.9);"));
+out = generateOverrides(sanitizeConfig({ effects: { reduceMotion: true } }));
+assert.ok(out.includes("--SNDL-Animation_Multiplier: 0.001;") && out.includes("--SNDL-Transition_Multiplier: 0.001;"));
+
+// avatar shape
+assert.ok(!generateOverrides(cfg()).includes("--SNDL-UI_Border-Radius_Circle"));
+assert.ok(generateOverrides(sanitizeConfig({ avatarShape: "square" })).includes("--SNDL-UI_Border-Radius_Circle: 0px;"));
+assert.ok(generateOverrides(sanitizeConfig({ avatarShape: "rounded" })).includes("--SNDL-UI_Border-Radius_Circle: 12px;"));
+
+// status colors emit multiple vars from one triplet
+out = generateOverrides(sanitizeConfig({ status: { online: "#00ff00", dnd: "255,0,0" } }));
+assert.ok(out.includes("--status-online: rgba(0, 255, 0, var(--SNDL-UI_Opacity_Solid));"));
+assert.ok(out.includes("--icon-status-online: rgba(0, 255, 0, var(--SNDL-UI_Opacity_Solid));"));
+assert.ok(out.includes("--icon-status-dnd: rgba(255, 0, 0, var(--SNDL-UI_Opacity_Solid));"));
+
+// gradient background wins over image, with dim overlay
+out = generateOverrides(sanitizeConfig({ background: "https://x/y.png", backgroundDim: 0.2, backgroundGradient: { enabled: true, from: "#000000", to: "#ffffff", angle: 90 } }));
+assert.ok(out.includes("--Misono-Background: linear-gradient(rgba(0,0,0,0.2),rgba(0,0,0,0.2)), linear-gradient(90deg, rgb(0, 0, 0), rgb(255, 255, 255)) fixed;"));
+// gradient ignored unless both colors valid
+assert.equal(sanitizeConfig({ backgroundGradient: { enabled: true, from: "#000000" } }).backgroundGradient.enabled, false);
+
+// custom scheme stops emitted only when a slot references "custom"
+out = generateOverrides(sanitizeConfig({ slots: { ...DEFAULT_SLOTS, Pink: "custom" }, customScheme: { moon: "10,20,30" } }));
+assert.ok(out.includes("--Custom-Moon: 10, 20, 30;"));
+assert.ok(out.includes("--SNDL-Pink_Primary: var(--Custom-Moon);"));
+assert.ok(!generateOverrides(sanitizeConfig({ customScheme: { moon: "10,20,30" } })).includes("--Custom-Moon"));
+
 // ---- routing with stubbed KV ----
 const store = new Map();
 const env = {

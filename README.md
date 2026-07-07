@@ -82,21 +82,25 @@ changes whenever Vencord refetches the theme (toggle it or reload to force).
 
 ## What you can control live
 
-- **Presets** — one-click looks (Sakura, Nebula Night, Glacier, Sharp Mode, Zen…) you can then tweak
+- **Presets** — one-click looks (Sakura, Nebula Night, Glacier, Sharp Mode, Zen, Vaporwave, Monochrome, OLED) you can then tweak
 - **MOTD** — the fake login notification text, or hide it entirely
 - **Status bar** text + **branch** label, or hide the status bar
 - **Accent color** — any hex/RGB; recolors links, mentions, brand & active states
 - **Font family** — swap the global font (validated)
-- **Background image** (any https URL) + **dim overlay** (0–1)
+- **Background** — image URL **or** a two-color **gradient builder** (angle + colors), with a **dim overlay**
+- **Scale & effects** — whole-UI **zoom**, **letter spacing**, and a global color grade (**saturation / contrast / brightness**), plus **reduce-motion**
+- **Shape** — **avatar shape** (round / rounded / square), **border** & **outline** size
+- **Status dot colors** — online / idle / dnd / offline / streaming
 - **Animation / transition / blur multipliers** (0×–4×)
 - **Border radius**, **padding**, and the four **UI opacity** levels
-- **Color slot remapping** — point any SNDL slot at any scheme
+- **Color slot remapping** — point any SNDL slot at any character scheme
   (e.g. `Green → mika` pink-shifts everything green)
+- **Custom palette** — edit your own 6-stop RGB ramp and map any slot to it
 - **Custom CSS** — raw CSS appended to the served theme (token-gated power-user hatch)
 - **Custom variables** — arbitrary `--Var: value` pairs via the API (escape-checked)
 
-All input is sanitized server-side (URL scheme checks, triplet parsing, font/var/CSS
-escaping) before it ever reaches `/theme.css`.
+All input is sanitized server-side (numeric clamps, URL scheme checks, hex/RGB triplet
+parsing, font/var/CSS escaping) before it ever reaches `/theme.css`.
 
 ## License
 
